@@ -178,14 +178,8 @@ function App() {
   })
   const [sortConfig, setSortConfig] = useState(getDefaultSort(initialReport, 'table'))
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [filters, setFilters] = useState({
-    startDate: '',
-    endDate: '',
-    sku: '',
-    costOperator: 'gt',
-    cost: '0',
-  })
-  const [appliedFilters, setAppliedFilters] = useState(filters)
+  const [filters, setFilters] = useState(() => buildFiltersWithDefaultDateRange())
+  const [appliedFilters, setAppliedFilters] = useState(() => buildFiltersWithDefaultDateRange())
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(20)
   const [pageData, setPageData] = useState(null)
@@ -229,15 +223,13 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (activeReport !== 'sb' || !isSkuDailyView) return
-
     setFilters((current) =>
       current.startDate && current.endDate ? current : buildFiltersWithDefaultDateRange(current),
     )
     setAppliedFilters((current) =>
       current.startDate && current.endDate ? current : buildFiltersWithDefaultDateRange(current),
     )
-  }, [activeReport, isSkuDailyView])
+  }, [activeReport, activeView])
 
   useEffect(() => {
     setSortConfig(getDefaultSort(activeReport, activeView))
@@ -260,10 +252,7 @@ function App() {
   const displayedCostTotal = reportTotalCost ?? totals.cost
 
   const buildRequestParams = useCallback(({ includePaging } = { includePaging: true }) => {
-    const requestFilters =
-      activeReport === 'sb' && isSkuDailyView
-        ? buildFiltersWithDefaultDateRange(appliedFilters)
-        : appliedFilters
+    const requestFilters = buildFiltersWithDefaultDateRange(appliedFilters)
     const params = new URLSearchParams()
 
     if (includePaging) {
@@ -283,7 +272,7 @@ function App() {
     })
 
     return params
-  }, [activeReport, appliedFilters, filterKey, isSkuDailyView, page, pageSize, showCostFilter, sortConfig])
+  }, [appliedFilters, filterKey, page, pageSize, showCostFilter, sortConfig])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -362,15 +351,14 @@ function App() {
 
   function applyFilters(event) {
     event.preventDefault()
+    const nextFilters = buildFiltersWithDefaultDateRange(filters)
     setPage(0)
-    setAppliedFilters(filters)
+    setFilters(nextFilters)
+    setAppliedFilters(nextFilters)
   }
 
   function resetFilters() {
-    const nextFilters =
-      activeReport === 'sb' && isSkuDailyView
-        ? buildFiltersWithDefaultDateRange()
-        : buildEmptyFilters()
+    const nextFilters = buildFiltersWithDefaultDateRange()
     setFilters(nextFilters)
     setAppliedFilters(nextFilters)
     setPage(0)
@@ -435,10 +423,8 @@ function App() {
       [activeReport]: nextView,
     }))
     setSortConfig(getDefaultSort(activeReport, nextView))
-    if (activeReport === 'sb' && nextView === 'skuDaily') {
-      setFilters((current) => buildFiltersWithDefaultDateRange(current))
-      setAppliedFilters((current) => buildFiltersWithDefaultDateRange(current))
-    }
+    setFilters((current) => buildFiltersWithDefaultDateRange(current))
+    setAppliedFilters((current) => buildFiltersWithDefaultDateRange(current))
     setPage(0)
   }
 
@@ -776,8 +762,7 @@ function buildFiltersWithDefaultDateRange(current = {}) {
 function getDefaultDateRange() {
   const endDate = new Date()
   endDate.setHours(0, 0, 0, 0)
-  const startDate = new Date(endDate)
-  startDate.setDate(startDate.getDate() - 6)
+  const startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1)
 
   return {
     startDate: formatDateInput(startDate),
