@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   ChevronLeft,
   ChevronRight,
+  Download,
   RefreshCw,
   Search,
   SlidersHorizontal,
@@ -17,8 +21,10 @@ const REPORTS = {
     label: 'SP Advertised',
     path: '/sp-advertised',
     endpoint: '/api/cms/reports/sp-advertised-products',
+    exportEndpoint: '/api/cms/reports/sp-advertised-products/export',
     totalCostEndpoint: '/api/cms/reports/sp-advertised-products/total-cost',
     skuDailyEndpoint: '/api/cms/reports/sp-advertised-products/sku-daily-cost',
+    skuDailyExportEndpoint: '/api/cms/reports/sp-advertised-products/sku-daily-cost/export',
     skuLabel: 'Advertised SKU',
     filterKey: 'sku',
     title: 'Sponsored Products advertised product report',
@@ -29,7 +35,9 @@ const REPORTS = {
     label: 'SB Campaigns',
     path: '/sb-campaigns',
     endpoint: '/api/cms/reports/sb-campaigns',
+    exportEndpoint: '/api/cms/reports/sb-campaigns/export',
     skuDailyEndpoint: '/api/cms/reports/sb-campaigns/sku-daily-cost',
+    skuDailyExportEndpoint: '/api/cms/reports/sb-campaigns/sku-daily-cost/export',
     skuLabel: 'Campaign Name',
     filterKey: 'campaignName',
     title: 'Sponsored Brands campaigns report',
@@ -40,6 +48,9 @@ const REPORTS = {
     label: 'SD Advertised',
     path: '/sd-advertised',
     endpoint: '/api/cms/reports/sd-advertised-products',
+    exportEndpoint: '/api/cms/reports/sd-advertised-products/export',
+    skuDailyEndpoint: '/api/cms/reports/sd-advertised-products/sku-daily-cost',
+    skuDailyExportEndpoint: '/api/cms/reports/sd-advertised-products/sku-daily-cost/export',
     skuLabel: 'Promoted SKU / ASIN',
     filterKey: 'sku',
     title: 'Sponsored Display advertised product report',
@@ -58,9 +69,9 @@ const REPORT_VIEWS = {
       subtitle: 'SKU-level ad cost, sales, clicks, and conversion performance.',
     },
     skuDaily: {
-      label: 'SKU daily cost',
-      title: 'SP cost by SKU per day',
-      subtitle: 'Total ad cost grouped by advertised SKU and date across all campaigns.',
+      label: 'SKU cost',
+      title: 'SP cost by SKU',
+      subtitle: 'Total ad cost grouped by advertised SKU across the selected date range.',
     },
   },
   sb: {
@@ -70,9 +81,21 @@ const REPORT_VIEWS = {
       subtitle: 'Campaign-level cost, sales, clicks, and new-to-brand metrics per day.',
     },
     skuDaily: {
-      label: 'SKU daily cost',
-      title: 'SB cost by SKU per day',
-      subtitle: 'Allocated Sponsored Brands cost grouped by participating SKU and date.',
+      label: 'SKU cost',
+      title: 'SB cost by SKU',
+      subtitle: 'Allocated Sponsored Brands cost grouped by participating SKU across the selected date range.',
+    },
+  },
+  sd: {
+    table: {
+      label: 'Table',
+      title: 'Sponsored Display advertised product report',
+      subtitle: 'SKU-level ad cost, sales, clicks, and display performance.',
+    },
+    skuDaily: {
+      label: 'SKU cost',
+      title: 'SD cost by SKU',
+      subtitle: 'Total display ad cost grouped by promoted SKU across the selected date range.',
     },
   },
 }
@@ -92,11 +115,24 @@ const spColumns = [
   { key: 'roasClicks7d', label: 'ROAS 7d', type: 'decimal' },
 ]
 
-const skuDailyCostColumns = [
-  { key: 'date', label: 'Date' },
+const skuCostColumns = [
+  { key: 'startDate', label: 'Start' },
+  { key: 'endDate', label: 'End' },
   { key: 'sku', label: 'SKU' },
   { key: 'totalCost', label: 'Total Cost', type: 'money' },
   { key: 'totalClicks', label: 'Clicks', type: 'number' },
+  { key: 'totalImpressions', label: 'Impressions', type: 'number' },
+  { key: 'campaignCount', label: 'Campaigns', type: 'number' },
+]
+
+const sbSkuCostColumns = [
+  { key: 'startDate', label: 'Start' },
+  { key: 'endDate', label: 'End' },
+  { key: 'sku', label: 'SKU' },
+  { key: 'totalCost', label: 'Total Cost', type: 'money' },
+  { key: 'skuClicks', label: 'SKU Clicks', type: 'number' },
+  { key: 'campaignClicks', label: 'Campaign Clicks', type: 'number' },
+  { key: 'skuClickPercentage', label: 'SKU Click %', type: 'percent' },
   { key: 'totalImpressions', label: 'Impressions', type: 'number' },
   { key: 'campaignCount', label: 'Campaigns', type: 'number' },
 ]
@@ -111,8 +147,8 @@ const sbColumns = [
   { key: 'impressions', label: 'Impressions', type: 'number' },
   { key: 'purchases', label: 'Purchases', type: 'number' },
   { key: 'unitsSold', label: 'Units Sold', type: 'number' },
-  { key: 'participatingSkus', label: 'Participating SKUs', type: 'tags' },
-  { key: 'participatingAsins', label: 'Participating ASINs', type: 'tags' },
+  { key: 'participatingSkus', label: 'Participating SKUs', type: 'tags', sortable: false },
+  { key: 'participatingAsins', label: 'Participating ASINs', type: 'tags', sortable: false },
   { key: 'newToBrandSales', label: 'NTB Sales', type: 'money' },
   { key: 'newToBrandPurchases', label: 'NTB Purchases', type: 'number' },
 ]
@@ -133,11 +169,14 @@ const sdColumns = [
 ]
 
 function App() {
-  const [activeReport, setActiveReport] = useState(getReportKeyFromPath())
+  const initialReport = getReportKeyFromPath()
+  const [activeReport, setActiveReport] = useState(initialReport)
   const [reportViews, setReportViews] = useState({
     sp: 'table',
     sb: 'table',
+    sd: 'table',
   })
+  const [sortConfig, setSortConfig] = useState(getDefaultSort(initialReport, 'table'))
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [filters, setFilters] = useState({
     startDate: '',
@@ -152,6 +191,7 @@ function App() {
   const [pageData, setPageData] = useState(null)
   const [reportTotalCost, setReportTotalCost] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState('')
 
   const report = REPORTS[activeReport]
@@ -162,7 +202,15 @@ function App() {
   const filterLabel = isSkuDailyView ? 'SKU' : report.skuLabel
   const filterKey = isSkuDailyView ? 'sku' : report.filterKey
   const showCostFilter = report.hasCostFilter && !isSkuDailyView
-  const columns = isSkuDailyView ? skuDailyCostColumns : activeReport === 'sp' ? spColumns : activeReport === 'sd' ? sdColumns : sbColumns
+  const columns = isSkuDailyView
+    ? activeReport === 'sb'
+      ? sbSkuCostColumns
+      : skuCostColumns
+    : activeReport === 'sp'
+      ? spColumns
+      : activeReport === 'sd'
+        ? sdColumns
+        : sbColumns
   const rows = useMemo(() => pageData?.content || [], [pageData])
 
   useEffect(() => {
@@ -191,6 +239,11 @@ function App() {
     )
   }, [activeReport, isSkuDailyView])
 
+  useEffect(() => {
+    setSortConfig(getDefaultSort(activeReport, activeView))
+    setPage(0)
+  }, [activeReport, activeView])
+
   const totals = useMemo(() => {
     const source = rows
     return source.reduce(
@@ -206,6 +259,32 @@ function App() {
 
   const displayedCostTotal = reportTotalCost ?? totals.cost
 
+  const buildRequestParams = useCallback(({ includePaging } = { includePaging: true }) => {
+    const requestFilters =
+      activeReport === 'sb' && isSkuDailyView
+        ? buildFiltersWithDefaultDateRange(appliedFilters)
+        : appliedFilters
+    const params = new URLSearchParams()
+
+    if (includePaging) {
+      params.set('page', String(page))
+      params.set('size', String(pageSize))
+    }
+
+    if (sortConfig?.key) {
+      params.append('sort', `${sortConfig.key},${sortConfig.direction}`)
+    }
+
+    Object.entries(requestFilters).forEach(([key, value]) => {
+      if (!value && value !== 0) return
+      if (!showCostFilter && (key === 'cost' || key === 'costOperator')) return
+      const paramKey = key === 'sku' ? filterKey : key
+      params.set(paramKey, value)
+    })
+
+    return params
+  }, [activeReport, appliedFilters, filterKey, isSkuDailyView, page, pageSize, showCostFilter, sortConfig])
+
   useEffect(() => {
     const controller = new AbortController()
 
@@ -213,24 +292,7 @@ function App() {
       setLoading(true)
       setError('')
 
-      const requestFilters =
-        activeReport === 'sb' && isSkuDailyView
-          ? buildFiltersWithDefaultDateRange(appliedFilters)
-          : appliedFilters
-      const params = new URLSearchParams()
-      params.set('page', String(page))
-      params.set('size', String(pageSize))
-      if (!isSkuDailyView) {
-        params.append('sort', 'date,desc')
-        params.append('sort', 'id,desc')
-      }
-
-      Object.entries(requestFilters).forEach(([key, value]) => {
-        if (!value && value !== 0) return
-        if (!showCostFilter && (key === 'cost' || key === 'costOperator')) return
-        const paramKey = key === 'sku' ? filterKey : key
-        params.set(paramKey, value)
-      })
+      const params = buildRequestParams({ includePaging: true })
 
       try {
         const endpoint = isSkuDailyView ? report.skuDailyEndpoint : report.endpoint
@@ -282,6 +344,7 @@ function App() {
   }, [
     activeReport,
     appliedFilters,
+    buildRequestParams,
     filterKey,
     isSkuDailyView,
     page,
@@ -290,6 +353,7 @@ function App() {
     report.skuDailyEndpoint,
     report.totalCostEndpoint,
     showCostFilter,
+    sortConfig,
   ])
 
   function updateFilter(key, value) {
@@ -312,6 +376,46 @@ function App() {
     setPage(0)
   }
 
+  function changeSort(column) {
+    if (column.sortable === false) return
+
+    setSortConfig((current) => {
+      const nextDirection = current.key === column.key && current.direction === 'desc' ? 'asc' : 'desc'
+      return { key: column.key, direction: nextDirection }
+    })
+    setPage(0)
+  }
+
+  async function downloadReport() {
+    const endpoint = isSkuDailyView ? report.skuDailyExportEndpoint : report.exportEndpoint
+    if (!endpoint) return
+
+    setDownloading(true)
+    setError('')
+
+    try {
+      const params = buildRequestParams({ includePaging: false })
+      const response = await fetch(`${API_BASE_URL}${endpoint}?${params}`)
+      if (!response.ok) {
+        throw new Error(`Download failed with status ${response.status}`)
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = getDownloadFilename(response.headers.get('content-disposition'), activeReport, activeView)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (downloadError) {
+      setError(downloadError.message || 'Unable to download report')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   function changeReport(event, nextReport) {
     event.preventDefault()
     const nextPath = REPORTS[nextReport].path
@@ -321,6 +425,7 @@ function App() {
     }
 
     setActiveReport(nextReport)
+    setSortConfig(getDefaultSort(nextReport, reportViews[nextReport] || 'table'))
     setPage(0)
   }
 
@@ -329,6 +434,7 @@ function App() {
       ...current,
       [activeReport]: nextView,
     }))
+    setSortConfig(getDefaultSort(activeReport, nextView))
     if (activeReport === 'sb' && nextView === 'skuDaily') {
       setFilters((current) => buildFiltersWithDefaultDateRange(current))
       setAppliedFilters((current) => buildFiltersWithDefaultDateRange(current))
@@ -493,22 +599,28 @@ function App() {
             <h2>{activeViewConfig?.title || report.title}</h2>
             <p>{activeViewConfig?.subtitle || report.subtitle}</p>
           </div>
-          <label className="page-size">
-            Rows
-            <select
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value))
-                setPage(0)
-              }}
-            >
-              {PAGE_SIZES.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="report-actions">
+            <button className="ghost-button" disabled={downloading} onClick={downloadReport} type="button">
+              <Download size={16} />
+              {downloading ? 'Downloading' : 'Excel'}
+            </button>
+            <label className="page-size">
+              Rows
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value))
+                  setPage(0)
+                }}
+              >
+                {PAGE_SIZES.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
 
         {error && <div className="alert">{error}</div>}
@@ -525,7 +637,16 @@ function App() {
             <thead>
               <tr>
                 {columns.map((column) => (
-                  <th key={column.key}>{column.label}</th>
+                  <th key={column.key}>
+                    {column.sortable === false ? (
+                      column.label
+                    ) : (
+                      <button className="sort-button" onClick={() => changeSort(column)} type="button">
+                        <span>{column.label}</span>
+                        {renderSortIcon(sortConfig, column.key)}
+                      </button>
+                    )}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -546,7 +667,7 @@ function App() {
               )}
               {!loading &&
                 rows.map((row) => (
-                  <tr key={row.id ?? `${row.sku}-${row.date}`}>
+                  <tr key={row.id ?? `${row.sku}-${row.startDate ?? row.date}-${row.endDate ?? ''}`}>
                     {columns.map((column) => (
                       <td key={column.key} title={column.type === 'tags' ? '' : String(row[column.key] ?? '')}>
                         {column.type === 'tags'
@@ -608,6 +729,28 @@ function Metric(props) {
 Metric.propTypes = {
   label: PropTypes.string.isRequired,
   value: PropTypes.string.isRequired,
+}
+
+function renderSortIcon(sortConfig, columnKey) {
+  if (sortConfig.key !== columnKey) return <ArrowUpDown size={14} />
+  return sortConfig.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+}
+
+function getDefaultSort(reportKey, viewKey) {
+  if (viewKey === 'skuDaily') {
+    return { key: 'totalCost', direction: 'desc' }
+  }
+
+  const report = REPORTS[reportKey]
+  return { key: report?.defaultSortKey || 'cost', direction: 'desc' }
+}
+
+function getDownloadFilename(contentDisposition, reportKey, viewKey) {
+  const match = contentDisposition?.match(/filename="?([^"]+)"?/i)
+  if (match?.[1]) return match[1]
+
+  const suffix = viewKey === 'skuDaily' ? 'sku-cost' : 'report'
+  return `${reportKey}-${suffix}.xlsx`
 }
 
 function buildEmptyFilters() {

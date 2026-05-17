@@ -379,6 +379,13 @@ select:focus {
   padding: 18px 20px;
 }
 
+.report-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12px;
+}
+
 .total-line {
   align-items: center;
   background: #f8fbfd;
@@ -446,6 +453,27 @@ th {
   position: sticky;
   top: 0;
   white-space: nowrap;
+}
+
+.sort-button {
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  gap: 6px;
+  justify-content: flex-start;
+  min-height: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.sort-button:hover {
+  transform: none;
+}
+
+.sort-button svg {
+  color: #64748b;
+  flex: 0 0 auto;
 }
 
 td {
@@ -538,6 +566,7 @@ tbody tr:hover td {
 
   .page-header,
   .report-head,
+  .report-actions,
   .pagination {
     align-items: stretch;
     flex-direction: column;
