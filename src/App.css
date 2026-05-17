@@ -283,57 +283,6 @@ button:not(:disabled):hover {
   padding: 18px;
 }
 
-.edit-panel {
-  background: #ffffff;
-  border: 1px solid #dce4ee;
-  border-radius: 8px;
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
-  margin-bottom: 18px;
-  padding: 18px;
-}
-
-.edit-panel-head {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-
-.daily-cost-form {
-  align-items: end;
-  display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(140px, 0.8fr) minmax(160px, 1fr) minmax(150px, 0.9fr) repeat(3, minmax(120px, 0.75fr)) minmax(150px, 0.8fr) auto;
-}
-
-.computed-total {
-  background: #f8fafc;
-  border: 1px solid #cfd9e6;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 38px;
-  padding: 8px 11px;
-}
-
-.computed-total span {
-  color: #64748b;
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
-.computed-total strong {
-  color: #111827;
-  font-size: 0.94rem;
-}
-
-.form-actions {
-  display: flex;
-  gap: 10px;
-}
-
 .filter-title {
   align-items: center;
   color: #111827;
@@ -479,14 +428,6 @@ select:focus {
   padding: 12px 20px;
 }
 
-.notice {
-  background: #ecfdf5;
-  border-bottom: 1px solid #bbf7d0;
-  color: #047857;
-  font-weight: 700;
-  padding: 12px 20px;
-}
-
 .table-wrap {
   overflow-x: auto;
 }
@@ -588,35 +529,12 @@ tbody tr:hover td {
   width: 38px;
 }
 
-.row-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.row-actions .icon-button {
-  height: 32px;
-  width: 32px;
-}
-
-.danger-button {
-  color: #b91c1c;
-}
-
 @media (max-width: 1180px) {
   .filters {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .daily-cost-form {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
   .filter-actions {
-    grid-column: span 3;
-    justify-content: flex-end;
-  }
-
-  .form-actions {
     grid-column: span 3;
     justify-content: flex-end;
   }
@@ -666,7 +584,6 @@ tbody tr:hover td {
   .tabs,
   .view-tabs,
   .summary-grid,
-  .daily-cost-form,
   .filters {
     display: grid;
     grid-template-columns: 1fr;
@@ -678,13 +595,8 @@ tbody tr:hover td {
   }
 
   .filter-actions,
-  .form-actions,
   .filter-actions button {
     width: 100%;
-  }
-
-  .form-actions {
-    grid-column: auto;
   }
 }
 

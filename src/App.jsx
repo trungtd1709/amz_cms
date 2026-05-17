@@ -6,15 +6,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  Pencil,
-  Plus,
   RefreshCw,
-  Save,
   Search,
   SlidersHorizontal,
   Table2,
-  Trash2,
-  X,
 } from 'lucide-react'
 import PropTypes from 'prop-types'
 import './App.css'
@@ -73,7 +68,6 @@ const REPORTS = {
     subtitle: 'Daily SP, SD, and SB advertising costs by SKU and group.',
     defaultSortKey: 'date',
     hasCostFilter: false,
-    editableCosts: true,
   },
 }
 
@@ -194,7 +188,6 @@ const dailyAdvertisingCostColumns = [
   { key: 'spendSd', label: 'Spend SD', type: 'money' },
   { key: 'spendSb', label: 'Spend SB', type: 'money' },
   { key: 'totalAdvertisingCosts', label: 'Total Advertising Costs', type: 'money' },
-  { key: 'actions', label: 'Actions', type: 'actions', sortable: false },
 ]
 
 function App() {
@@ -216,17 +209,12 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
-  const [dailyCostForm, setDailyCostForm] = useState(() => buildEmptyDailyCostForm())
-  const [savingDailyCost, setSavingDailyCost] = useState(false)
-  const [deletingDailyCostId, setDeletingDailyCostId] = useState(null)
-  const [refreshToken, setRefreshToken] = useState(0)
 
   const report = REPORTS[activeReport]
   const activeView = reportViews[activeReport] || 'table'
   const reportViewOptions = REPORT_VIEWS[activeReport]
   const activeViewConfig = reportViewOptions?.[activeView]
-  const isDailyCostsReport = Boolean(report.editableCosts)
+  const isDailyCostsReport = activeReport === 'dailyCosts'
   const isSkuDailyView = activeView === 'skuDaily' && Boolean(report.skuDailyEndpoint)
   const filterLabel = isSkuDailyView ? 'SKU' : report.skuLabel
   const filterKey = isSkuDailyView ? 'sku' : report.filterKey
@@ -378,7 +366,6 @@ function App() {
     isSkuDailyView,
     page,
     pageSize,
-    refreshToken,
     report.endpoint,
     report.skuDailyEndpoint,
     report.totalCostEndpoint,
@@ -403,98 +390,6 @@ function App() {
     setFilters(nextFilters)
     setAppliedFilters(nextFilters)
     setPage(0)
-  }
-
-  function updateDailyCostForm(key, value) {
-    setDailyCostForm((current) => ({ ...current, [key]: value }))
-  }
-
-  function resetDailyCostForm() {
-    setDailyCostForm(buildEmptyDailyCostForm())
-    setNotice('')
-  }
-
-  function editDailyCost(row) {
-    setDailyCostForm({
-      id: row.id,
-      date: row.date || '',
-      sku: row.sku || '',
-      group: row.group || '',
-      spendSp: toInputAmount(row.spendSp),
-      spendSd: toInputAmount(row.spendSd),
-      spendSb: toInputAmount(row.spendSb),
-    })
-    setError('')
-    setNotice('')
-  }
-
-  async function saveDailyCost(event) {
-    event.preventDefault()
-
-    if (!dailyCostForm.date || !dailyCostForm.sku.trim()) {
-      setError('Date and Sku are required.')
-      setNotice('')
-      return
-    }
-
-    setSavingDailyCost(true)
-    setError('')
-    setNotice('')
-
-    const isEditing = Boolean(dailyCostForm.id)
-    const payload = {
-      date: dailyCostForm.date,
-      sku: dailyCostForm.sku.trim(),
-      group: dailyCostForm.group.trim(),
-      spendSp: parseMoneyInput(dailyCostForm.spendSp),
-      spendSd: parseMoneyInput(dailyCostForm.spendSd),
-      spendSb: parseMoneyInput(dailyCostForm.spendSb),
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}${report.endpoint}${isEditing ? `/${dailyCostForm.id}` : ''}`, {
-        body: JSON.stringify(payload),
-        headers: { 'Content-Type': 'application/json' },
-        method: isEditing ? 'PUT' : 'POST',
-      })
-
-      if (!response.ok) {
-        throw new Error(`Save failed with status ${response.status}`)
-      }
-
-      setNotice(isEditing ? 'Daily cost row updated.' : 'Daily cost row saved.')
-      setDailyCostForm(buildEmptyDailyCostForm())
-      setRefreshToken((current) => current + 1)
-    } catch (saveError) {
-      setError(saveError.message || 'Unable to save daily advertising cost')
-    } finally {
-      setSavingDailyCost(false)
-    }
-  }
-
-  async function deleteDailyCost(row) {
-    if (!window.confirm(`Delete daily cost for ${row.sku} on ${row.date}?`)) return
-
-    setDeletingDailyCostId(row.id)
-    setError('')
-    setNotice('')
-
-    try {
-      const response = await fetch(`${API_BASE_URL}${report.endpoint}/${row.id}`, { method: 'DELETE' })
-      if (!response.ok) {
-        throw new Error(`Delete failed with status ${response.status}`)
-      }
-
-      if (dailyCostForm.id === row.id) {
-        setDailyCostForm(buildEmptyDailyCostForm())
-      }
-      setNotice('Daily cost row deleted.')
-      setRefreshToken((current) => current + 1)
-    } catch (deleteError) {
-      setError(deleteError.message || 'Unable to delete daily advertising cost')
-    } finally {
-      setDeletingDailyCostId(null)
-    }
   }
 
   function changeSort(column) {
@@ -549,7 +444,6 @@ function App() {
     setSortConfig(getDefaultSort(nextReport, reportViews[nextReport] || 'table'))
     setPage(0)
     setError('')
-    setNotice('')
   }
 
   function changeReportView(nextView) {
@@ -712,90 +606,6 @@ function App() {
         </div>
       </form>
 
-      {isDailyCostsReport && (
-        <section className="edit-panel">
-          <div className="edit-panel-head">
-            <h2>{dailyCostForm.id ? 'Edit daily cost' : 'New daily cost'}</h2>
-            {dailyCostForm.id && (
-              <button className="ghost-button" onClick={resetDailyCostForm} type="button">
-                <Plus size={16} />
-                New row
-              </button>
-            )}
-          </div>
-          <form className="daily-cost-form" onSubmit={saveDailyCost}>
-            <label>
-              Date
-              <input
-                required
-                type="date"
-                value={dailyCostForm.date}
-                onChange={(event) => updateDailyCostForm('date', event.target.value)}
-              />
-            </label>
-            <label>
-              Sku
-              <input
-                required
-                value={dailyCostForm.sku}
-                onChange={(event) => updateDailyCostForm('sku', event.target.value)}
-              />
-            </label>
-            <label>
-              Group
-              <input
-                value={dailyCostForm.group}
-                onChange={(event) => updateDailyCostForm('group', event.target.value)}
-              />
-            </label>
-            <label>
-              Spend SP
-              <input
-                min="0"
-                step="0.01"
-                type="number"
-                value={dailyCostForm.spendSp}
-                onChange={(event) => updateDailyCostForm('spendSp', event.target.value)}
-              />
-            </label>
-            <label>
-              Spend SD
-              <input
-                min="0"
-                step="0.01"
-                type="number"
-                value={dailyCostForm.spendSd}
-                onChange={(event) => updateDailyCostForm('spendSd', event.target.value)}
-              />
-            </label>
-            <label>
-              Spend SB
-              <input
-                min="0"
-                step="0.01"
-                type="number"
-                value={dailyCostForm.spendSb}
-                onChange={(event) => updateDailyCostForm('spendSb', event.target.value)}
-              />
-            </label>
-            <div className="computed-total" aria-label="Total advertising costs">
-              <span>Total</span>
-              <strong>{formatMoney(calculateDailyCostTotal(dailyCostForm))}</strong>
-            </div>
-            <div className="form-actions">
-              <button className="ghost-button" onClick={resetDailyCostForm} type="button">
-                <X size={16} />
-                Clear
-              </button>
-              <button className="primary-button" disabled={savingDailyCost} type="submit">
-                <Save size={16} />
-                {savingDailyCost ? 'Saving' : 'Save'}
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
-
       <section className="summary-grid">
         <Metric label="Rows found" value={formatNumber(totalElements)} />
         <Metric
@@ -839,7 +649,6 @@ function App() {
         </div>
 
         {error && <div className="alert">{error}</div>}
-        {notice && <div className="notice">{notice}</div>}
 
         {(activeReport === 'sp' || isSkuDailyView || isDailyCostsReport) && (
           <div className="total-line">
@@ -886,31 +695,9 @@ function App() {
                   <tr key={row.id ?? `${row.sku}-${row.startDate ?? row.date}-${row.endDate ?? ''}`}>
                     {columns.map((column) => (
                       <td key={column.key} title={column.type === 'tags' ? '' : String(row[column.key] ?? '')}>
-                        {column.type === 'actions' ? (
-                          <div className="row-actions">
-                            <button
-                              className="icon-button"
-                              onClick={() => editDailyCost(row)}
-                              title="Edit row"
-                              type="button"
-                            >
-                              <Pencil size={15} />
-                            </button>
-                            <button
-                              className="icon-button danger-button"
-                              disabled={deletingDailyCostId === row.id}
-                              onClick={() => deleteDailyCost(row)}
-                              title="Delete row"
-                              type="button"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
-                        ) : column.type === 'tags' ? (
-                          renderTags(row[column.key])
-                        ) : (
-                          formatCell(row[column.key], column.type)
-                        )}
+                        {column.type === 'tags'
+                          ? renderTags(row[column.key])
+                          : formatCell(row[column.key], column.type)}
                       </td>
                     ))}
                   </tr>
@@ -1002,21 +789,6 @@ function buildEmptyFilters() {
   }
 }
 
-function buildEmptyDailyCostForm() {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  return {
-    id: null,
-    date: formatDateInput(today),
-    sku: '',
-    group: '',
-    spendSp: '0',
-    spendSd: '0',
-    spendSb: '0',
-  }
-}
-
 function buildFiltersWithDefaultDateRange(current = {}) {
   const range = getDefaultDateRange()
   return {
@@ -1043,20 +815,6 @@ function formatDateInput(date) {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
-}
-
-function toInputAmount(value) {
-  if (value === null || value === undefined || value === '') return '0'
-  return String(value)
-}
-
-function parseMoneyInput(value) {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
-function calculateDailyCostTotal(form) {
-  return parseMoneyInput(form.spendSp) + parseMoneyInput(form.spendSd) + parseMoneyInput(form.spendSb)
 }
 
 function normalizeApiBaseUrl(value) {
